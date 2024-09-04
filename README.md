@@ -6,9 +6,9 @@ https://huggingface.co/viks66/IndicMOS
 
 Use the following reference while citing this work - 
 
-@inproceedings{sathvik_indicmos,
+<code>@inproceedings{sathvik_indicmos,
   title     = {IndicMOS: Multilingual MOS Prediction for 7 Indian languages},
   author    = {Sathvik Udupa and Soumi Maiti and Prasanta Kumar Ghosh},
   year      = {2024},
   booktitle = {Interspeech 2024},
-}
+}</code>
