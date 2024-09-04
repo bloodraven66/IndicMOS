@@ -1,0 +1,48 @@
+data:
+  data_path: /home1/Sathvik/MOS_DATASET/
+  train_dataset: [LIMMITS23]
+  test_dataset: [LIMMITS23,LIMMITS24]
+  train_filename: "all_scored_data_train.txt"
+  dev_filename: "all_scored_data_dev.txt"
+  test_filename: "all_scored_data_test.txt"
+  wav_folder: "all_scored_data_16k"
+  sampling_rate: 16000  
+  filter_length: 1024
+  hop_length: 256
+  win_length: 1024
+  n_mels: 80
+  mel_fmin: 0.0
+  mel_fmax: 8000.0
+  cer_path: asr_metrics/VERSION_cer_data.txt
+  exclude_lang: False
+  exclude_lang_name: mr
+
+#infera
+num_samples: 5
+infer: true
+infer_chk: wav2vec2_modelconfig-ssl_base_train-LIMMITS23.pt
+#saved_models/wav2vec2_modelconfig-ssl_base_train-LIMMITS23.pt
+
+
+#train
+device: cuda:1
+model: wav2vec2 #xls_r_300m
+# path_or_url: Harveenchadha/vakyansh_hindi_base_pretrained
+# path_or_url: /home1/Sathvik/fairseq_models/indicwav2vec/converted_chks/indicw2v_base_pretrained.pt
+weighted_sum: False
+use_cer: False
+use_lang: False
+use_mc: False
+use_task: False
+
+freeze_ssl: true
+model_config: config/ssl_base.yaml
+num_epochs: 20 
+save_patience: 4
+batch_size: 32
+lr: 0.01
+weight_decay: 1e-6
+bypass_checkpoint: true
+chk_folder: saved_models
+metrics_folder: metrics
+tag: ''

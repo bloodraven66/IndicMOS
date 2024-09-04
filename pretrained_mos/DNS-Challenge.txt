@@ -1,0 +1,1 @@
+https://github.com/microsoft/DNS-Challenge/blob/master/DNSMOS/dnsmos_local.py
