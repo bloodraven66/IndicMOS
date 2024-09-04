@@ -2,7 +2,7 @@
 Code reporsitory for the INTERSPEECH 2024 paper - IndicMOS: Multilingual MOS Prediction for 7 Indian languages
 
 Inference model and script in huggingface - 
-https://huggingface.co/viks66/IndicMOS
+https://huggingface.co/viks66/IndicMOS. Run <code>infer_indicmos.py</code>
 
 Use the following reference while citing this work - 
 
