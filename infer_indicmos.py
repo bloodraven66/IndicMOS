@@ -14,8 +14,8 @@ from huggingface_hub import hf_hub_download
 
 parser = argparse.ArgumentParser(description="IndicMOS Inference")
 parser.add_argument("--audio_path", type=str, required=True, help="Path to the audio file")
-parser.add_argument("--use_cer", type=bool, default=False, help="Enable to use CER as an input feature for MOS prediction")
-parser.add_argument("--use_language_id", type=bool, default=False, help="Enable to use Language ID as an input feature for MOS prediction")
+parser.add_argument("--use_cer", action="store_true", default=False, help="Enable to use CER as an input feature for MOS prediction")
+parser.add_argument("--use_langid", action="store_true", default=False, help="Enable to use Language ID as an input feature for MOS prediction")
 
 REPO_ID = "viks66/IndicMOS"
 SSL_NAME = "indicw2v_base_pretrained.pt"
@@ -24,6 +24,22 @@ CER_PREDICTOR = "joint_indicw2v_base_cer.pt"
 LANG_ID_PREDICTOR = "joint_indicw2v_base_lang.pt"
 CER_LANG_ID_PREDICTOR = "joint_indicw2v_base_cer_lang.pt"
 
+LANG_ID_MAPPING = {
+    "hi": 0,
+    "te": 1,
+    "mr": 2,
+    "kn": 3,
+    "bn": 4,
+    "en": 5,
+    "ch": 6,
+    "hindi": 0,
+    "telugu": 1,
+    "marathi": 2,
+    "kannada": 3,
+    "bengali": 4,
+    "english": 5,
+    "chhattisgarhi": 6,
+}
 
 class ssl_mospred_model(nn.Module):
     def __init__(
@@ -32,31 +48,35 @@ class ssl_mospred_model(nn.Module):
         dim=768,
         use_cer=False,
         use_lang=False,
-        
+        lang_dim=32,
+        cer_hidden_dim=32,
+        cer_final_dim=4,
+        proj_dim=64,
+        num_langs=7
     ):
         super(ssl_mospred_model, self).__init__()
         self.ssl_model = ssl_model        
         if use_cer:
-            dim = 68
+            dim = cer_hidden_dim
         if use_lang:
-            dim += 32
+            dim += lang_dim
         
         self.linear = nn.Linear(dim, 1)
         self.use_cer = use_cer
         if use_cer:
             self.cer_embed = nn.Sequential(
-                nn.Linear(1, 32),
+                nn.Linear(1, cer_hidden_dim),
                 nn.ReLU(),
-                nn.Linear(32, 4),
+                nn.Linear(cer_hidden_dim, cer_final_dim),
                 nn.ReLU(),
             )
             self.feat_proj = nn.Sequential(
                 nn.ReLU(),
-                nn.Linear(dim, 64),
+                nn.Linear(dim, proj_dim),
             )
         self.use_lang = use_lang
         if use_lang:
-            self.lang_embed = nn.Embedding(7, 32)
+            self.lang_embed = nn.Embedding(num_langs, lang_dim)
     
     def handle_cer_embed(self, feats, cer):
         if not self.use_cer:
@@ -95,15 +115,15 @@ def load_custom_model_from_s3prl(path):
     ssl_model = getattr(hub, "wav2vec2_custom")(ckpt=path)
     return ssl_model
     
-def load_model(use_cer, use_language_id, download_path, device):
+def load_model(use_cer, use_langid, download_path, device):
     """
     Load the model from the hub
     """
-    if use_cer and use_language_id:
+    if use_cer and use_langid:
         chk = CER_LANG_ID_PREDICTOR
     elif use_cer:
         chk = CER_PREDICTOR
-    elif use_language_id:
+    elif use_langid:
         chk = LANG_ID_PREDICTOR
     else:
         chk = BASE_PREDICTOR
@@ -112,7 +132,7 @@ def load_model(use_cer, use_language_id, download_path, device):
     ssl_model = load_custom_model_from_s3prl(ssl_path)
     predictor = torch.load(predictor_path, map_location=device)
     
-    mos_model = ssl_mospred_model(ssl_model, use_cer=use_cer, use_lang=use_language_id)
+    mos_model = ssl_mospred_model(ssl_model, use_cer=use_cer, use_lang=use_langid)
     mos_model.linear.weight.data = predictor["linear.weight"]
     mos_model.linear.bias.data = predictor["linear.bias"]
 
@@ -125,24 +145,44 @@ def load_model(use_cer, use_language_id, download_path, device):
         mos_model.feat_proj[1].weight.data = predictor["feat_proj.1.weight"]
         mos_model.feat_proj[1].bias.data = predictor["feat_proj.1.bias"]
         
-    if use_language_id:
+    if use_langid:
         mos_model.lang_embed.weight.data = predictor["lang_embed.weight"]
     
     mos_model.to(device)
+    mos_model.eval()
     return mos_model
 
-def score(audio_path, cer=None, langid=None, use_cer=False, use_language_id=False, download_path="hf_inference_models", device="cpu"):
+def preprocess_single(audio_path, cer, langid):
+    """
+    Preprocess the audio file and metadata
+    """
+    audio, sr = torchaudio.load(audio_path)
+    if cer is not None:
+        cer = torch.tensor([cer])
+    if langid is not None:
+        if langid not in LANG_ID_MAPPING:
+            raise ValueError("Language ID not supported, please use one of the following: {}".format(LANG_ID_MAPPING.keys()))
+        langid = torch.tensor([LANG_ID_MAPPING[langid]])
+    return audio, cer, langid
+
+def score(audio_path, cer=None, langid=None, use_cer=False, use_langid=False, download_path="hf_inference_models", device="cpu"):
     """
     Single audio mos prediction
     """
-    audio, _ = torchaudio.load(audio_path)
-    mos_model = load_model(use_cer, use_language_id, download_path, device)
-    score = mos_model(audio, cer_data=cer, lang_data=langid)
+    audio, cer, langid = preprocess_single(audio_path, cer, langid)
+    mos_model = load_model(use_cer, use_langid, download_path, device)
+    with torch.no_grad():
+        score = mos_model(audio, cer_data=cer, lang_data=langid)
     return score
 
 if __name__ == "__main__":
     args = parser.parse_args()
-    score = score(audio_path=args.audio_path, use_cer=args.use_cer, use_language_id=args.use_language_id)
+    cer = None
+    if cer is not None:
+        if cer > 1:
+            print("WARNING: Use raw CER value, not percentage")
+    langid = None
+    score = score(audio_path=args.audio_path, cer=cer, langid=langid, use_cer=args.use_cer, use_langid=args.use_langid)
     print(score)
 
     
