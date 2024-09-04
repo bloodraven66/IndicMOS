@@ -4,6 +4,8 @@ Code reporsitory for the INTERSPEECH 2024 paper - IndicMOS: Multilingual MOS Pre
 Inference model and script in huggingface - 
 https://huggingface.co/viks66/IndicMOS. Run <code>infer_indicmos.py</code>
 
+---
+
 Use the following reference while citing this work - 
 
 <code>@inproceedings{sathvik_indicmos,
